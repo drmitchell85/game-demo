@@ -89,7 +89,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 | 4.1 ✅ | Combat stats — `hp`, `maxHp`, `attack`, `hasAttacked` on Unit; reducer resets `hasAttacked` on END_TURN; 3 enemies total | `Unit.ts`, `GameState.ts`, `reducer.ts`, `tests/state.test.ts` |
 | 4.2 ✅ | Combat resolver + ATTACK_UNIT action — pure hit/damage math; reducer applies damage (clamped to 0); reducer guards against missing/self targets | `combat/CombatResolver.ts` *(new)*, `actions.ts`, `reducer.ts`, `tests/combat.test.ts` *(new)* |
 | 4.3 ✅ | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
-| 4.4a | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
+| 4.4a ✅ | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
 | 4.4b | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
 | 4.5 | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
 | 4.6 | Damage feedback — attacker bump animation; floating damage numbers / "MISS" text; `CombatAnimations` helper | `GameScene.ts`, `systems/CombatAnimations.ts` *(new)* |
@@ -201,27 +201,27 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-### 4.4a — UnitSprite Container Refactor
+### 4.4a ✅ — UnitSprite Container Refactor
 
 **Goal:** Migrate `UnitSprite` from a bare `Phaser.GameObjects.Rectangle` to a `Phaser.GameObjects.Container`. No visual change — this is a structural refactor to enable HP bars (4.4b) to move with the unit during animation.
 
 **What to do:**
-- [ ] `UnitSprite.ts`: replace the bare `Rectangle` with a `Container` holding the rectangle as a child
+- [x] `UnitSprite.ts`: replace the bare `Rectangle` with a `Container` holding the rectangle as a child
   - `getGameObject()` now returns the `Container` (was `Rectangle`)
   - Add `destroy()` method that destroys the container and all children
-- [ ] `MovementSystem.ts` / `moveAlongPath()`: update type signature — accept `Phaser.GameObjects.Container` (or a `{ x: number; y: number }` interface that both Container and Rectangle satisfy — prefer the interface for flexibility)
-- [ ] `GameScene.ts`: update `unitSprites.get(id)` call sites to use new `getGameObject()` return type
+- [x] `MovementSystem.ts` / `moveAlongPath()`: update type signature — accept `Phaser.GameObjects.Container` (or a `{ x: number; y: number }` interface that both Container and Rectangle satisfy — prefer the interface for flexibility) _(no code change needed — already uses structural interface)_
+- [x] `GameScene.ts`: update `unitSprites.get(id)` call sites to use new `getGameObject()` return type _(no code change needed — structural typing covers it)_
 
 **Files:**
 - `src/entities/UnitSprite.ts` _(modify — significant refactor)_
-- `src/systems/MovementSystem.ts` _(modify — type signature)_
-- `src/scenes/GameScene.ts` _(modify — call sites)_
+- `src/systems/MovementSystem.ts` _(no change — already uses `{ x: number; y: number }` structural interface)_
+- `src/scenes/GameScene.ts` _(no change — structural typing handles return type change)_
 
 **Acceptance criteria:**
-- [ ] All existing movement behavior unchanged — unit animates smoothly between hexes
-- [ ] Hover highlight, selection indicator, range highlight all still work
-- [ ] Turn cycling still works
-- [ ] `npm test` passes; `npm run build` clean
+- [x] All existing movement behavior unchanged — unit animates smoothly between hexes
+- [x] Hover highlight, selection indicator, range highlight all still work
+- [x] Turn cycling still works
+- [x] `npm test` passes; `npm run build` clean
 
 ---
 

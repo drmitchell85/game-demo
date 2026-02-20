@@ -26,7 +26,7 @@ game-demo/
     │   └── CombatResolver.ts         # resolveAttack(attacker, defender): AttackResult — pure hit/damage math (75% hit chance, attack±1 damage)
     ├── entities/
     │   ├── Unit.ts                   # Unit interface (pure data, no Phaser): id, hex, moveRange, faction, hasMoved, hasAttacked, hp, maxHp, attack
-    │   └── UnitSprite.ts             # Phaser.GameObjects.Rectangle placeholder; depth 3
+    │   └── UnitSprite.ts             # Phaser.GameObjects.Container (holds Rectangle child); depth 3; destroy() cleans up children
     ├── state/
     │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN, ATTACK_UNIT)
     │   ├── GameState.ts              # GameState interface + createInitialState()
