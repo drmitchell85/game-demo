@@ -237,3 +237,37 @@ describe('applyAction ATTACK_UNIT', () => {
     expect(next.units.get('enemy-1')?.hp).toBe(6);               // 8 - 2 = 6 (damage applied)
   });
 });
+
+// ---------------------------------------------------------------------------
+// applyAction — REMOVE_UNIT
+// ---------------------------------------------------------------------------
+
+describe('applyAction REMOVE_UNIT', () => {
+  it('removes the unit from state', () => {
+    const state = createInitialState();
+    const next  = applyAction(state, { type: 'REMOVE_UNIT', unitId: 'enemy-1' });
+    expect(next.units.has('enemy-1')).toBe(false);
+  });
+
+  it('is a no-op when the unit id is unknown', () => {
+    const state = createInitialState();
+    const next  = applyAction(state, { type: 'REMOVE_UNIT', unitId: 'ghost' });
+    expect(next).toBe(state);
+  });
+
+  it('does not remove other units', () => {
+    const state = createInitialState();
+    const next  = applyAction(state, { type: 'REMOVE_UNIT', unitId: 'enemy-1' });
+    expect(next.units.has('player')).toBe(true);
+    expect(next.units.has('player-2')).toBe(true);
+    expect(next.units.has('enemy-2')).toBe(true);
+    expect(next.units.has('enemy-3')).toBe(true);
+  });
+
+  it('returns a new state object (immutable update)', () => {
+    const state = createInitialState();
+    const next  = applyAction(state, { type: 'REMOVE_UNIT', unitId: 'enemy-1' });
+    expect(next).not.toBe(state);
+    expect(next.units).not.toBe(state.units);
+  });
+});

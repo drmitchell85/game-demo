@@ -91,7 +91,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 | 4.3 ✅ | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
 | 4.4a ✅ | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
 | 4.4b ✅ | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
-| 4.5 | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
+| 4.5 ✅ | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
 | 4.6 | Damage feedback — attacker bump animation; floating damage numbers / "MISS" text; `CombatAnimations` helper | `GameScene.ts`, `systems/CombatAnimations.ts` *(new)* |
 
 ---
@@ -252,14 +252,14 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-### 4.5 — Death + Unit Removal
+### 4.5 ✅ — Death + Unit Removal
 
 **Goal:** Units with HP ≤ 0 are removed from state and their sprites destroyed.
 
 **What to do:**
-- [ ] `actions.ts`: add `{ type: 'REMOVE_UNIT'; unitId: string }` to the union
-- [ ] `reducer.ts`: handle `REMOVE_UNIT` — delete unit from the `units` Map
-- [ ] `GameScene.ts`: after dispatching `ATTACK_UNIT`, check defender HP:
+- [x] `actions.ts`: add `{ type: 'REMOVE_UNIT'; unitId: string }` to the union
+- [x] `reducer.ts`: handle `REMOVE_UNIT` — delete unit from the `units` Map
+- [x] `GameScene.ts`: after dispatching `ATTACK_UNIT`, check defender HP:
   ```ts
   const defender = this.gameState.units.get(defenderId);
   if (defender && defender.hp <= 0) {
@@ -269,22 +269,22 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
   }
   ```
   - Invariant: `REMOVE_UNIT` must be dispatched synchronously after `ATTACK_UNIT` (or immediately after an awaited animation in 4.6) — never on the next frame
-- [ ] `tests/combat.test.ts`: add tests for REMOVE_UNIT (unit removed from state; unknown ID is a no-op)
+- [x] `tests/combat.test.ts`: add tests for REMOVE_UNIT (unit removed from state; unknown ID is a no-op)
 
 **Files:**
 - `src/state/actions.ts` _(modify)_
 - `src/state/reducer.ts` _(modify)_
 - `src/scenes/GameScene.ts` _(modify)_
-- `src/entities/UnitSprite.ts` _(modify — ensure `destroy()` cleans up Container and children)_
+- `src/entities/UnitSprite.ts` _(no change needed — `destroy()` was already correct from 4.4a)_
 - `tests/combat.test.ts` _(modify)_
 
 **Acceptance criteria:**
-- [ ] Attack enemy to 0 HP → sprite disappears from the map
-- [ ] Dead enemy's hex is no longer highlighted as an attack target
-- [ ] Dead enemy no longer blocks movement (hex is free)
-- [ ] Game continues normally after a unit dies — turns cycle, remaining units are selectable
-- [ ] After all enemies are killed, End Turn still works and rounds increment normally
-- [ ] `npm test` passes; `npm run build` clean
+- [x] Attack enemy to 0 HP → sprite disappears from the map
+- [x] Dead enemy's hex is no longer highlighted as an attack target
+- [x] Dead enemy no longer blocks movement (hex is free)
+- [x] Game continues normally after a unit dies — turns cycle, remaining units are selectable
+- [x] After all enemies are killed, End Turn still works and rounds increment normally
+- [x] `npm test` passes; `npm run build` clean
 
 ---
 

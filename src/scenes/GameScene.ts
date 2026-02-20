@@ -218,6 +218,17 @@ export class GameScene extends Phaser.Scene {
       defenderSprite.updateHp(updatedDefender.hp, updatedDefender.maxHp);
     }
 
+    // If the defender's HP reached 0, remove from state and destroy the sprite.
+    // Dispatched synchronously so the logical and visual state agree before the
+    // next click. (Phase 4.6 will insert an animation await between attack and removal.)
+    if (updatedDefender && updatedDefender.hp <= 0) {
+      this.gameState = applyAction(this.gameState, { type: 'REMOVE_UNIT', unitId: defender.id });
+      if (defenderSprite) {
+        defenderSprite.destroy();
+        this.unitSprites.delete(defender.id);
+      }
+    }
+
     this.clearSelection();
     return true;
   }

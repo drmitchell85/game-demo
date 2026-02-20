@@ -35,6 +35,14 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return { ...state, units: updatedUnits };
     }
 
+    case 'REMOVE_UNIT': {
+      // Unknown unit id — no-op (return the same reference so callers can detect it).
+      if (!state.units.has(action.unitId)) return state;
+      const updatedUnits = new Map(state.units);
+      updatedUnits.delete(action.unitId);
+      return { ...state, units: updatedUnits };
+    }
+
     case 'END_TURN': {
       const nextTurn = state.activeTurn === 'PLAYER' ? 'ENEMY' : 'PLAYER';
 
