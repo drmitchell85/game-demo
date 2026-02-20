@@ -18,18 +18,19 @@ export function applyAction(state: GameState, action: GameAction): GameState {
     case 'END_TURN': {
       const nextTurn = state.activeTurn === 'PLAYER' ? 'ENEMY' : 'PLAYER';
 
-      // Transitioning to PLAYER: increment round and reset hasMoved for all player units.
+      // Transitioning to PLAYER: increment round and reset hasMoved + hasAttacked for all player units.
+      // TODO(Phase 5): reset enemy hasMoved + hasAttacked on PLAYER → ENEMY transition.
       if (nextTurn === 'PLAYER') {
         const updatedUnits = new Map(state.units);
         for (const [id, unit] of updatedUnits) {
           if (unit.faction === 'player') {
-            updatedUnits.set(id, { ...unit, hasMoved: false });
+            updatedUnits.set(id, { ...unit, hasMoved: false, hasAttacked: false });
           }
         }
         return { ...state, activeTurn: 'PLAYER', round: state.round + 1, units: updatedUnits };
       }
 
-      // Transitioning to ENEMY: no round change, no hasMoved reset.
+      // Transitioning to ENEMY: no round change, no reset.
       return { ...state, activeTurn: 'ENEMY' };
     }
   }
