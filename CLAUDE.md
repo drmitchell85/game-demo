@@ -59,6 +59,50 @@ Before writing any code:
 ## Code Style & Conventions
 - TBD
 
+## File Size & Complexity Guidelines
+
+### Core Principle
+
+A file should have **one clear responsibility**. File size is a secondary indicator — a large
+file with one job is better than three small files that fragment a cohesive concept.
+
+### Review Thresholds
+
+When a source file exceeds these line counts, pause and evaluate whether it has accumulated
+multiple responsibilities:
+
+| File Type | Review At | Notes |
+|-----------|:---------:|-------|
+| **Most source files** | ~150 lines | Modules, services, utilities, components, reducers |
+| **Root coordinators** | ~300 lines | Entry points, app shells, container components, or anything whose job is wiring other modules together — larger is expected |
+| **Config / pure type files** | ~50 lines | Should stay trivial; a growing config file usually means misplaced logic |
+| **Test files** | ~400 lines | Consider splitting by feature area if navigability suffers |
+
+These are **review triggers, not hard caps**. A 180-line file of cohesive pure functions is
+fine. A 120-line file with three unrelated responsibilities needs splitting regardless of size.
+
+### When to Split
+
+A file should be split when any of these are true:
+- It has **multiple distinct responsibilities** (e.g., input handling AND state management AND rendering in one file)
+- New features keep getting added to it **because "it's already there"** rather than because they belong there
+- It has **grown 50+ lines in a single session** without a deliberate architectural reason — this is the strongest signal of scope creep
+
+### When NOT to Split
+
+Do **not** split a file just to hit a line-count target. These are signs a large file is healthy:
+- All functions/methods serve a single cohesive purpose (e.g., many utility functions, one domain)
+- The file is a coordinator whose size comes from wiring modules together, not from logic
+- Splitting would require shared state or tight coupling between the new files
+- The file is large because of framework or library API surface area
+
+### How to Split
+
+When splitting is warranted:
+- Extract into the **existing directory structure** — don't create new directories unless a new domain genuinely emerges
+- Follow **established naming conventions** already present in the project
+- The extracted module should be independently understandable — if it requires reading the parent file to make sense, the split was wrong
+
 ## Do not
 - Store secrets in code (use env variables)
 - commit without testing
