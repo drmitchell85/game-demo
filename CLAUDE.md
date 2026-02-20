@@ -12,7 +12,8 @@ game-demo/
 └── src/
     ├── main.ts                       # Creates Phaser.Game, registers scenes
     ├── config/
-    │   └── game.config.ts            # Phaser config: pixelArt, resolution, scale
+    │   ├── game.config.ts            # Phaser config: pixelArt, resolution, scale
+    │   └── colors.ts                 # Shared hex highlight color constants (hover, range, selection, attack)
     ├── scenes/
     │   ├── BootScene.ts              # Asset preload pass-through → GameScene
     │   └── GameScene.ts              # Main gameplay scene (stub, grows each phase)
@@ -35,7 +36,11 @@ game-demo/
     ├── systems/
     │   ├── MovementSystem.ts         # moveAlongPath(): chains Phaser tweens, returns Promise<void>
     │   ├── InputSystem.ts            # pointerup (left click only) → pixelToHex → onHexClick callback; destroy() removes listener
-    │   └── CameraSystem.ts           # middle-mouse drag pan; scroll-wheel zoom (Phase 2.4)
+    │   ├── CameraSystem.ts           # keyboard pan (arrow+WASD), middle-mouse drag, scroll-wheel zoom, zoom-adaptive grid stroke; update() called each frame
+    │   ├── CombatAnimations.ts       # playAttackBump(): attacker bump tween; showDamageText(): floating hit/miss label; flashDefenderHex(): brief red hex overlay
+    │   ├── HoverSystem.ts            # tracks pointer hex each frame; redraws depth-2 highlight layer (selection indicator + hover tint)
+    │   ├── SelectionManager.ts       # owns selectedUnitId, reachableSet, attackTargetSet; selectUnit() / clearSelection() drive range + attack highlights
+    │   └── TurnSystem.ts             # handleEndTurn() + runEnemyTurn(): END_TURN dispatch, 1-second enemy pause, round counter update; uses callbacks so it never imports SceneMode
     ├── ui/
     │   └── EndTurnButton.ts          # Fixed-screen HUD button (setScrollFactor(0), depth 10); setEnabled() toggles interactivity
     └── utils/

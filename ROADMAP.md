@@ -74,7 +74,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-## Phase 4: Combat _(planned)_
+## Phase 4: Combat ✅ Complete
 
 **Goal:** Melee combat loop — select a unit, click an adjacent enemy to attack, resolve hit/miss + damage, display HP bars, remove dead units, animate attacks.
 
@@ -92,7 +92,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 | 4.4a ✅ | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
 | 4.4b ✅ | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
 | 4.5 ✅ | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
-| 4.6 | Damage feedback — attacker bump animation; floating damage numbers / "MISS" text; `CombatAnimations` helper | `GameScene.ts`, `systems/CombatAnimations.ts` *(new)* |
+| 4.6 ✅ | Damage feedback — attacker bump animation; floating damage numbers / "MISS" text; `CombatAnimations` helper | `GameScene.ts`, `systems/CombatAnimations.ts` *(new)* |
 
 ---
 
@@ -288,31 +288,31 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-### 4.6 — Damage Feedback + Attack Animation
+### 4.6 ✅ — Damage Feedback + Attack Animation
 
 **Goal:** Visual feedback for combat — attacker bumps toward target, floating damage numbers appear, input is locked during animation.
 
 **What to do:**
-- [ ] Create `src/systems/CombatAnimations.ts`:
+- [x] Create `src/systems/CombatAnimations.ts`:
   - `playAttackBump(scene, sprite, targetHex, hexRenderer): Promise<void>` — tweens attacker ~12px toward target and back (~300ms total)
   - `showDamageText(scene, position, result: AttackResult): void` — spawns `Phaser.GameObjects.Text` at defender position, floats up ~30px and fades out over 800ms, then destroys itself; hit shows damage number in white/red, miss shows "MISS" in gray
-- [ ] `GameScene.ts` / `tryAttackUnit()`:
+- [x] `GameScene.ts` / `tryAttackUnit()`:
   1. `sceneMode = 'MOVING'` (block input during animation — same pattern as movement)
   2. `endTurnButton.setEnabled(false)`
   3. `try { await playAttackBump(...); resolveAttack(...); dispatch ATTACK_UNIT; update HP bar; check death; showDamageText(...) } finally { if (scene.isActive()) { endTurnButton.setEnabled(true) } sceneMode = 'IDLE' }`
-- [ ] Optional: brief red flash on defender hex on hit (reuse `hexRenderer.highlightHex`, clear after 200ms)
+- [x] Optional: brief red flash on defender hex on hit (implemented as self-contained `flashDefenderHex` at depth 15 — avoids shared highlight layer timing conflicts)
 
 **Files:**
 - `src/systems/CombatAnimations.ts` _(new)_
 - `src/scenes/GameScene.ts` _(modify)_
 
 **Acceptance criteria:**
-- [ ] Clicking an adjacent enemy: attacker briefly bumps toward target and returns
-- [ ] On hit: damage number floats up from defender and fades out
-- [ ] On miss: "MISS" text floats up and fades out
-- [ ] Input is blocked during the attack animation (clicking during bump does nothing)
-- [ ] Animation works correctly at map edges and near camera bounds
-- [ ] `npm test` passes; `npm run build` clean
+- [x] Clicking an adjacent enemy: attacker briefly bumps toward target and returns
+- [x] On hit: damage number floats up from defender and fades out
+- [x] On miss: "MISS" text floats up and fades out
+- [x] Input is blocked during the attack animation (clicking during bump does nothing)
+- [x] Animation works correctly at map edges and near camera bounds
+- [x] `npm test` passes; `npm run build` clean
 
 **Decision logged:** `hasMoved` and `hasAttacked` are independent booleans — units can move and attack in either order. Action points (AP) deferred to Phase 6 where move-vs-attack tradeoffs become meaningful with varied unit types.
 
