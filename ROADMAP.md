@@ -90,7 +90,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 | 4.2 ✅ | Combat resolver + ATTACK_UNIT action — pure hit/damage math; reducer applies damage (clamped to 0); reducer guards against missing/self targets | `combat/CombatResolver.ts` *(new)*, `actions.ts`, `reducer.ts`, `tests/combat.test.ts` *(new)* |
 | 4.3 ✅ | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
 | 4.4a ✅ | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
-| 4.4b | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
+| 4.4b ✅ | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
 | 4.5 | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
 | 4.6 | Damage feedback — attacker bump animation; floating damage numbers / "MISS" text; `CombatAnimations` helper | `GameScene.ts`, `systems/CombatAnimations.ts` *(new)* |
 
@@ -225,30 +225,30 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-### 4.4b — HP Bars
+### 4.4b ✅ — HP Bars
 
 **Goal:** Each unit displays an HP bar above its rectangle. Bars update after damage and follow units during movement.
 
 **What to do:**
-- [ ] `UnitSprite.ts`: add HP bar to the Container in the constructor:
+- [x] `UnitSprite.ts`: add HP bar to the Container in the constructor:
   - Background: dark gray rectangle (`0x333333`), width 28px, height 4px, positioned ~4px above unit rect top
   - Fill: colored rectangle on top, width = `(hp / maxHp) * 28`
   - Color thresholds: green (`0x44cc44`) > 50% HP, yellow (`0xcccc44`) > 25%, red (`0xcc4444`) ≤ 25%
-  - Both at depth 4 (above unit rectangle at depth 3)
-- [ ] `UnitSprite.ts`: add `updateHp(hp: number, maxHp: number): void` — recalculates fill width and color
-- [ ] `GameScene.ts`: after dispatching `ATTACK_UNIT`, call `defenderSprite.updateHp(defenderUnit.hp, defenderUnit.maxHp)`
-- [ ] Remove the temporary `console.log` added in 4.3 (HP bars now provide visual feedback)
+  - Children use container insertion order for z-ordering (not global depth)
+- [x] `UnitSprite.ts`: add `updateHp(hp: number, maxHp: number): void` — recalculates fill width and color
+- [x] `GameScene.ts`: after dispatching `ATTACK_UNIT`, call `defenderSprite.updateHp(defenderUnit.hp, defenderUnit.maxHp)`
+- [x] Remove the temporary `console.log` added in 4.3 (HP bars now provide visual feedback)
 
 **Files:**
 - `src/entities/UnitSprite.ts` _(modify)_
 - `src/scenes/GameScene.ts` _(modify)_
 
 **Acceptance criteria:**
-- [ ] All units show full green HP bars on load
-- [ ] After attacking an enemy, its HP bar shrinks; color changes at 50% and 25% thresholds
-- [ ] HP bars follow units during movement animation (Container handles this automatically)
-- [ ] HP bars render correctly after turn cycling
-- [ ] `npm test` passes; `npm run build` clean
+- [x] All units show full green HP bars on load
+- [x] After attacking an enemy, its HP bar shrinks; color changes at 50% and 25% thresholds
+- [x] HP bars follow units during movement animation (Container handles this automatically)
+- [x] HP bars render correctly after turn cycling
+- [x] `npm test` passes; `npm run build` clean
 
 ---
 

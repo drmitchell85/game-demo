@@ -201,13 +201,6 @@ export class GameScene extends Phaser.Scene {
     if (!attacker || !defender) return false;
 
     const result = resolveAttack(attacker, defender);
-    const newHp  = Math.max(0, defender.hp - result.damage);
-    console.log(
-      `[${attacker.id}] attacks [${defender.id}]: ` +
-      (result.hit
-        ? `HIT for ${result.damage} dmg (HP: ${defender.hp} → ${newHp})`
-        : `MISS (HP: ${defender.hp} → ${newHp})`),  // newHp === defender.hp on miss
-    );
 
     this.gameState = applyAction(this.gameState, {
       type:       'ATTACK_UNIT',
@@ -216,6 +209,15 @@ export class GameScene extends Phaser.Scene {
       hit:        result.hit,
       damage:     result.damage,
     });
+
+    // Update defender's HP bar to reflect the post-attack state.
+    // Read from gameState after dispatch so we get the reducer's clamped value.
+    const updatedDefender = this.gameState.units.get(defender.id);
+    const defenderSprite  = this.unitSprites.get(defender.id);
+    if (updatedDefender && defenderSprite) {
+      defenderSprite.updateHp(updatedDefender.hp, updatedDefender.maxHp);
+    }
+
     this.clearSelection();
     return true;
   }
