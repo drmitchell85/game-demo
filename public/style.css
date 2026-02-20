@@ -1,0 +1,22 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0a;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  /* Disable browser smoothing so pixel art stays crisp when scaled */
+  image-rendering: pixelated;      /* Chrome, Edge */
+  image-rendering: crisp-edges;   /* Firefox */
+  -ms-interpolation-mode: nearest-neighbor; /* IE (legacy) */
+}
