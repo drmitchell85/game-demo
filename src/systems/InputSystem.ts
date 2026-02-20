@@ -3,7 +3,7 @@ import { HexCoord, pixelToHex } from '../hex/HexCoord';
 import { HexGrid } from '../hex/HexGrid';
 
 // Listens for pointerup events, converts screen coords to hex coords,
-// and calls onMoveIntent if the click lands on a valid grid cell.
+// and calls onHexClick if the click lands on a valid grid cell.
 export class InputSystem {
   private readonly handler: (pointer: Phaser.Input.Pointer) => void;
 
@@ -12,7 +12,7 @@ export class InputSystem {
     grid: HexGrid,
     gridOrigin: { x: number; y: number },
     hexSize: number,
-    onMoveIntent: (hex: HexCoord) => void,
+    onHexClick: (hex: HexCoord) => void,
   ) {
     this.handler = (pointer: Phaser.Input.Pointer) => {
       if (pointer.button !== 0) return; // left click only — ignore middle/right mouse
@@ -22,7 +22,7 @@ export class InputSystem {
         hexSize,
       );
       if (grid.has(hex)) {
-        onMoveIntent(hex);
+        onHexClick(hex);
       }
     };
 

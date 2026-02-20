@@ -12,6 +12,7 @@ import { getReachableHexes } from '../hex/HexHighlight';
 import { moveAlongPath } from '../systems/MovementSystem';
 import { InputSystem } from '../systems/InputSystem';
 import { CameraSystem } from '../systems/CameraSystem';
+import { EndTurnButton } from '../ui/EndTurnButton';
 
 const HOVER_COLOR  = 0x3d3d8a;
 const HOVER_ALPHA  = 0.75;
@@ -43,9 +44,13 @@ export class GameScene extends Phaser.Scene {
   // null = no unit selected; set when player clicks a player-faction unit.
   private selectedUnitId: string | null = null;
 
+  private endTurnButton!: EndTurnButton;
+  private roundText!: Phaser.GameObjects.Text;
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: WASDKeys;
   private cameraSystem!: CameraSystem;
+  private inputSystem!: InputSystem;
   private lastZoom = 1;
 
   // Hex keys of cells the selected unit can currently move to (excludes occupied hexes).
@@ -113,9 +118,24 @@ export class GameScene extends Phaser.Scene {
     this.cameraSystem = new CameraSystem(this, this.cameras.main);
 
     // Wire up click-to-select / click-to-move.
-    new InputSystem(this, this.grid, this.gridOrigin, HEX_SIZE, (hex) => {
+    this.inputSystem = new InputSystem(this, this.grid, this.gridOrigin, HEX_SIZE, (hex) => {
       void this.handleClickIntent(hex);
     });
+    // Remove the pointerup handler when the scene shuts down so it doesn't
+    // accumulate if the scene is ever restarted via scene.restart().
+    this.events.once('shutdown', () => this.inputSystem.destroy(this));
+
+    // HUD: round counter (top-left) and End Turn button (bottom-right).
+    // Both use setScrollFactor(0) to stay fixed on screen during pan/zoom.
+    this.roundText = this.add.text(12, 12, `Round ${this.gameState.round}`, {
+      fontSize:   '14px',
+      color:      '#e0e0e0',
+      fontFamily: 'monospace',
+    })
+      .setScrollFactor(0)
+      .setDepth(10);
+
+    this.endTurnButton = new EndTurnButton(this, () => this.handleEndTurn());
   }
 
   update(): void {
@@ -145,10 +165,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   // Dispatched on every left-click on the grid. Two cases:
-  //   1. Clicked on a player-faction unit → select it (show range).
+  //   1. Clicked on a player-faction unit → select it (show range if not yet moved).
   //   2. Clicked on a reachable hex with a unit selected → move that unit.
   private async handleClickIntent(targetHex: HexCoord): Promise<void> {
     if (this.sceneMode !== 'IDLE') return;
+    // Defense-in-depth: sceneMode is already 'MOVING' during enemy turn, but
+    // this guard makes the intent explicit and covers any future divergence.
+    if (this.gameState.activeTurn !== 'PLAYER') return;
 
     // Case 1: a player unit occupies the clicked hex — select it.
     const unitAtHex = getUnitAtHex(this.gameState, targetHex);
@@ -161,7 +184,18 @@ export class GameScene extends Phaser.Scene {
     if (this.selectedUnitId === null) return;
     if (!this.reachableSet.has(hexKey(targetHex))) return;
 
-    const unit = this.gameState.units.get(this.selectedUnitId)!;
+    const unitId = this.selectedUnitId; // capture before await — sceneMode blocks mutations but local is explicit
+    const unit   = this.gameState.units.get(unitId);
+    if (!unit) return; // should always exist; guard against future REMOVE_UNIT action
+    // Explicit hasMoved guard: reachableSet is already empty when hasMoved === true
+    // (selectUnit clears it), so this case can't be reached in practice. Guard kept
+    // for documentation and defense against future range-display bugs.
+    if (unit.hasMoved) return;
+
+    // Guard before locking state: if the sprite is missing (e.g. unit died),
+    // bail out cleanly without ever setting sceneMode = 'MOVING'.
+    const sprite = this.unitSprites.get(unitId);
+    if (!sprite) return;
 
     // Pass occupied hexes so the path never animates through another unit's sprite.
     // Exclude the moving unit's own starting hex — the BFS must be free to treat
@@ -178,31 +212,52 @@ export class GameScene extends Phaser.Scene {
     if (!path || path.length === 0) return;
 
     this.sceneMode = 'MOVING';
+    this.endTurnButton.setEnabled(false); // dim button while unit is animating
     this.hexRenderer.clearRange();
 
-    await moveAlongPath(
-      this,
-      this.unitSprites.get(this.selectedUnitId)!.getGameObject(),
-      path,
-      this.hexRenderer,
-    );
+    // try/finally ensures sceneMode and button are always restored, even if
+    // moveAlongPath throws (e.g. scene shutdown mid-animation).
+    try {
+      await moveAlongPath(this, sprite.getGameObject(), path, this.hexRenderer);
 
-    // State update after animation so logical position matches visual.
-    this.gameState = applyAction(this.gameState, {
-      type:   'MOVE_UNIT',
-      unitId: this.selectedUnitId,
-      to:     targetHex,
-    });
+      // State update after animation so logical position matches visual.
+      this.gameState = applyAction(this.gameState, {
+        type:   'MOVE_UNIT',
+        unitId,
+        to:     targetHex,
+      });
 
-    this.clearSelection(); // deselect after moving; range clears with it
-    this.sceneMode = 'IDLE';
+      this.clearSelection(); // deselect after moving; range clears with it
+    } finally {
+      // clearSelection() and setEnabled() access Phaser GameObjects that are
+      // destroyed on scene shutdown. Guard with isActive() so a throw during
+      // shutdown doesn't crash inside the finally block itself.
+      // sceneMode is a plain field — safe to restore regardless.
+      if (this.scene.isActive()) {
+        // Idempotent on the success path (clearSelection already called above);
+        // clears half-selected state if moveAlongPath throws in a live scene.
+        this.clearSelection();
+        this.endTurnButton.setEnabled(true);
+      }
+      this.sceneMode = 'IDLE';
+    }
   }
 
-  // Select a unit by id: show its movement range and the white selection indicator.
-  // Excludes hexes occupied by any unit from the reachable set.
+  // Select a unit by id. If the unit has not yet moved, shows its movement range
+  // and the white selection indicator. If it has already moved this turn, shows
+  // only the selection indicator (empty range) — the player can see it's selected
+  // but no blue hexes appear and clicking elsewhere does nothing.
   private selectUnit(unitId: string): void {
+    const unit = this.gameState.units.get(unitId);
+    if (!unit) return; // should always exist; guard against future REMOVE_UNIT action
     this.selectedUnitId = unitId;
-    this.refreshRangeHighlight(unitId);
+    if (unit.hasMoved) {
+      // Already moved: clear range so reachableSet stays empty and no blue hexes show.
+      this.reachableSet = new Set();
+      this.hexRenderer.clearRange();
+    } else {
+      this.refreshRangeHighlight(unitId);
+    }
     this.redrawHighlightLayer();
   }
 
@@ -214,10 +269,35 @@ export class GameScene extends Phaser.Scene {
     this.redrawHighlightLayer();
   }
 
+  // Called when the player clicks the End Turn button.
+  // Transitions to enemy turn: locks input, dispatches END_TURN, starts async pause.
+  private handleEndTurn(): void {
+    // sceneMode is the primary lock; activeTurn is defense-in-depth — it is always
+    // 'PLAYER' when sceneMode is 'IDLE', but the explicit check documents intent and
+    // guards against any future state-machine divergence.
+    if (this.sceneMode !== 'IDLE' || this.gameState.activeTurn !== 'PLAYER') return;
+    this.clearSelection();
+    this.gameState = applyAction(this.gameState, { type: 'END_TURN' });
+    this.sceneMode = 'MOVING'; // reuse MOVING to block all grid input
+    this.endTurnButton.setEnabled(false);
+    void this.runEnemyTurn();
+  }
+
+  // Simulates the enemy turn: waits 1 second, then flips back to the player.
+  // Uses Phaser's timer (not setTimeout) so it respects game pause/resume.
+  private async runEnemyTurn(): Promise<void> {
+    await new Promise<void>(resolve => this.time.delayedCall(1000, resolve));
+    this.gameState = applyAction(this.gameState, { type: 'END_TURN' });
+    this.sceneMode = 'IDLE';
+    this.endTurnButton.setEnabled(true);
+    this.roundText.setText(`Round ${this.gameState.round}`);
+  }
+
   // Recompute the reachable set and range overlay for a specific unit.
   // Excludes the unit's own hex and any hex currently occupied by another unit.
   private refreshRangeHighlight(unitId: string): void {
-    const unit      = this.gameState.units.get(unitId)!;
+    const unit = this.gameState.units.get(unitId);
+    if (!unit) return; // guard against future REMOVE_UNIT action
     const reachable = getReachableHexes(this.grid, unit.hex, unit.moveRange);
 
     // Build a set of all occupied hexes so we can exclude them from the range.

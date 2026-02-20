@@ -32,8 +32,10 @@ game-demo/
     │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits
     ├── systems/
     │   ├── MovementSystem.ts         # moveAlongPath(): chains Phaser tweens, returns Promise<void>
-    │   ├── InputSystem.ts            # pointerup (left click only) → pixelToHex → onClickIntent callback
+    │   ├── InputSystem.ts            # pointerup (left click only) → pixelToHex → onHexClick callback; destroy() removes listener
     │   └── CameraSystem.ts           # middle-mouse drag pan; scroll-wheel zoom (Phase 2.4)
+    ├── ui/
+    │   └── EndTurnButton.ts          # Fixed-screen HUD button (setScrollFactor(0), depth 10); setEnabled() toggles interactivity
     └── utils/
         └── EventBus.ts               # Singleton Phaser EventEmitter for cross-scene events
 ```
