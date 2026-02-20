@@ -22,11 +22,13 @@ game-demo/
     │   ├── HexRenderer.ts            # 3 Graphics layers (depth 0/1/2): base grid, range highlight, hover
     │   ├── HexHighlight.ts           # getReachableHexes(): BFS limited by range (pure math, no Phaser)
     │   └── pathfinding.ts            # findPath(): BFS shortest path, excludes start hex; optional blocked set skips occupied waypoints
+    ├── combat/
+    │   └── CombatResolver.ts         # resolveAttack(attacker, defender): AttackResult — pure hit/damage math (75% hit chance, attack±1 damage)
     ├── entities/
-    │   ├── Unit.ts                   # Unit interface (pure data, no Phaser): id, hex, moveRange, faction, hasMoved
+    │   ├── Unit.ts                   # Unit interface (pure data, no Phaser): id, hex, moveRange, faction, hasMoved, hasAttacked, hp, maxHp, attack
     │   └── UnitSprite.ts             # Phaser.GameObjects.Rectangle placeholder; depth 3
     ├── state/
-    │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN)
+    │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN, ATTACK_UNIT)
     │   ├── GameState.ts              # GameState interface + createInitialState()
     │   ├── reducer.ts                # applyAction(state, action): GameState — pure, immutable
     │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits

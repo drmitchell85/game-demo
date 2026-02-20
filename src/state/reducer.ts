@@ -15,6 +15,26 @@ export function applyAction(state: GameState, action: GameAction): GameState {
       return { ...state, units: updatedUnits };
     }
 
+    case 'ATTACK_UNIT': {
+      const attacker = state.units.get(action.attackerId);
+      const defender = state.units.get(action.defenderId);
+      // Guard: unknown unit or self-attack — no-op.
+      if (!attacker || !defender || action.attackerId === action.defenderId) return state;
+
+      const updatedUnits = new Map(state.units);
+
+      // Attacker uses their attack regardless of hit or miss.
+      updatedUnits.set(action.attackerId, { ...attacker, hasAttacked: true });
+
+      // On hit: reduce defender hp, clamped to 0 (death handled separately in 4.5).
+      if (action.hit) {
+        const newHp = Math.max(0, defender.hp - action.damage);
+        updatedUnits.set(action.defenderId, { ...defender, hp: newHp });
+      }
+
+      return { ...state, units: updatedUnits };
+    }
+
     case 'END_TURN': {
       const nextTurn = state.activeTurn === 'PLAYER' ? 'ENEMY' : 'PLAYER';
 

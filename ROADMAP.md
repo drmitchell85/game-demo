@@ -87,7 +87,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 | Step | Description | Key files |
 |------|-------------|-----------|
 | 4.1 ✅ | Combat stats — `hp`, `maxHp`, `attack`, `hasAttacked` on Unit; reducer resets `hasAttacked` on END_TURN; 3 enemies total | `Unit.ts`, `GameState.ts`, `reducer.ts`, `tests/state.test.ts` |
-| 4.2 | Combat resolver + ATTACK_UNIT action — pure hit/damage math; reducer applies damage (clamped to 0); reducer guards against missing/self targets | `combat/CombatResolver.ts` *(new)*, `actions.ts`, `reducer.ts`, `tests/combat.test.ts` *(new)* |
+| 4.2 ✅ | Combat resolver + ATTACK_UNIT action — pure hit/damage math; reducer applies damage (clamped to 0); reducer guards against missing/self targets | `combat/CombatResolver.ts` *(new)*, `actions.ts`, `reducer.ts`, `tests/combat.test.ts` *(new)* |
 | 4.3 | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
 | 4.4a | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
 | 4.4b | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
@@ -128,7 +128,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 **Goal:** Pure combat math and the reducer action to apply results. Fully testable, no UI changes.
 
 **What to do:**
-- [ ] Create `src/combat/CombatResolver.ts`:
+- [x] Create `src/combat/CombatResolver.ts`:
   ```ts
   interface AttackResult { hit: boolean; damage: number }
   function resolveAttack(attacker: Unit, defender: Unit): AttackResult
@@ -136,16 +136,16 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
   - `BASE_HIT_CHANCE = 0.75` (75% flat)
   - On hit: `damage = attacker.attack + randomInt(-1, 1)`, minimum 1
   - On miss: `{ hit: false, damage: 0 }`
-- [ ] `actions.ts`: add to the union:
+- [x] `actions.ts`: add to the union:
   ```ts
   | { type: 'ATTACK_UNIT'; attackerId: string; defenderId: string; hit: boolean; damage: number }
   ```
   (Pre-resolved — scene rolls, then dispatches the outcome; reducer stays deterministic)
-- [ ] `reducer.ts`: handle `ATTACK_UNIT`:
-  - Guard: `if (!attacker || !defender) return state`; `if (attacker.id === defender.id) return state`
+- [x] `reducer.ts`: handle `ATTACK_UNIT`:
+  - Guard: `if (!attacker || !defender || action.attackerId === action.defenderId) return state`
   - Set `hasAttacked: true` on attacker (regardless of hit/miss)
   - On hit: reduce defender `hp` by `damage`, clamped to minimum 0
-- [ ] `tests/combat.test.ts` _(new)_:
+- [x] `tests/combat.test.ts` _(new)_:
   - Test `resolveAttack` returns `hit: true`/`hit: false` (mock `Math.random`)
   - Test damage range is `[attack-1, attack+1]`, minimum 1
   - Test ATTACK_UNIT reducer applies damage correctly
@@ -160,9 +160,9 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 - `tests/combat.test.ts` _(new)_
 
 **Acceptance criteria:**
-- [ ] `npm test` passes (all combat + reducer tests)
-- [ ] Browser still works unchanged
-- [ ] `npm run build` clean
+- [x] `npm test` passes (all combat + reducer tests)
+- [x] Browser still works unchanged
+- [x] `npm run build` clean
 
 ---
 

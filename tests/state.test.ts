@@ -145,6 +145,11 @@ describe('applyAction MOVE_UNIT', () => {
     expect(after.moveRange).toBe(before.moveRange);
     expect(after.faction).toBe(before.faction);
     expect(after.hasMoved).toBe(true); // MOVE_UNIT sets hasMoved
+    // Combat stats must be preserved unchanged across MOVE_UNIT
+    expect(after.hasAttacked).toBe(before.hasAttacked);
+    expect(after.hp).toBe(before.hp);
+    expect(after.maxHp).toBe(before.maxHp);
+    expect(after.attack).toBe(before.attack);
   });
 
   it('sets hasMoved to true on the moved unit', () => {
