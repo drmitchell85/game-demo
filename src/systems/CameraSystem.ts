@@ -1,19 +1,80 @@
 import Phaser from 'phaser';
-import { ZOOM_STEP, MIN_ZOOM, MAX_ZOOM } from '../config/game.config';
+import { ZOOM_STEP, MIN_ZOOM, MAX_ZOOM, PAN_SPEED } from '../config/game.config';
+import { HexRenderer } from '../hex/HexRenderer';
 
-// Owns camera input beyond keyboard pan (which lives in GameScene.update).
-// Handles middle-mouse drag pan and scroll-wheel zoom.
+// Directional keys returned by addKeys() for WASD pan.
+interface WASDKeys {
+  up:    Phaser.Input.Keyboard.Key;
+  down:  Phaser.Input.Keyboard.Key;
+  left:  Phaser.Input.Keyboard.Key;
+  right: Phaser.Input.Keyboard.Key;
+}
+
+// Owns all camera input: keyboard pan (arrow + WASD), middle-mouse drag pan,
+// scroll-wheel zoom, and the zoom-adaptive grid stroke redraw.
 export class CameraSystem {
-  private readonly scene: Phaser.Scene;
-  private readonly camera: Phaser.Cameras.Scene2D.Camera;
+  private readonly scene:       Phaser.Scene;
+  private readonly camera:      Phaser.Cameras.Scene2D.Camera;
+  private readonly hexRenderer: HexRenderer;
 
+  // Keyboard pan keys — bound in the constructor.
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!:    WASDKeys;
+
+  // Grid stroke redraw is only needed when zoom actually changes.
+  private lastZoom = 1;
+
+  // Middle-mouse drag state.
   private isDragging = false;
   private dragStart   = { x: 0, y: 0 };
 
-  constructor(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera) {
-    this.scene  = scene;
-    this.camera = camera;
+  constructor(
+    scene:       Phaser.Scene,
+    camera:      Phaser.Cameras.Scene2D.Camera,
+    hexRenderer: HexRenderer,
+  ) {
+    this.scene       = scene;
+    this.camera      = camera;
+    this.hexRenderer = hexRenderer;
+    this.bindKeyboard();
     this.bindEvents();
+  }
+
+  // Call once per frame from GameScene.update().
+  // Handles keyboard pan and zoom-adaptive grid stroke in one place.
+  update(): void {
+    this.panCamera();
+    this.updateGridStroke();
+  }
+
+  // Moves the camera based on held arrow / WASD keys each frame.
+  // Camera bounds (set in create) clamp scrollX/Y automatically.
+  private panCamera(): void {
+    const cam = this.camera;
+    if (this.cursors.left.isDown  || this.wasd.left.isDown)  cam.scrollX -= PAN_SPEED;
+    if (this.cursors.right.isDown || this.wasd.right.isDown) cam.scrollX += PAN_SPEED;
+    if (this.cursors.up.isDown    || this.wasd.up.isDown)    cam.scrollY -= PAN_SPEED;
+    if (this.cursors.down.isDown  || this.wasd.down.isDown)  cam.scrollY += PAN_SPEED;
+  }
+
+  // Redraws hex grid borders when camera zoom changes, keeping them exactly
+  // 1 screen pixel thick: world strokeWidth = 1 / zoom.
+  private updateGridStroke(): void {
+    const zoom = this.camera.zoom;
+    if (zoom !== this.lastZoom) {
+      this.lastZoom = zoom;
+      this.hexRenderer.redrawGrid(1 / zoom);
+    }
+  }
+
+  private bindKeyboard(): void {
+    this.cursors = this.scene.input.keyboard!.createCursorKeys();
+    this.wasd    = this.scene.input.keyboard!.addKeys({
+      up:    'W',
+      down:  'S',
+      left:  'A',
+      right: 'D',
+    }) as WASDKeys;
   }
 
   private bindEvents(): void {

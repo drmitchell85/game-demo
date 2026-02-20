@@ -1,19 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { createInitialState } from '../src/state/GameState';
 import { applyAction } from '../src/state/reducer';
-import { getUnitAtHex, getPlayerUnits, getEnemyUnits } from '../src/state/selectors';
+import { getUnitAtHex, getPlayerUnits, getEnemyUnits, getAdjacentEnemies } from '../src/state/selectors';
 
 // ---------------------------------------------------------------------------
 // createInitialState
 // ---------------------------------------------------------------------------
 
 describe('createInitialState', () => {
-  it('contains 3 units (2 player + 1 enemy)', () => {
+  it('contains 5 units (2 player + 3 enemy)', () => {
     const state = createInitialState();
-    expect(state.units.size).toBe(3);
+    expect(state.units.size).toBe(5);
     expect(state.units.has('player')).toBe(true);
     expect(state.units.has('player-2')).toBe(true);
     expect(state.units.has('enemy-1')).toBe(true);
+    expect(state.units.has('enemy-2')).toBe(true);
+    expect(state.units.has('enemy-3')).toBe(true);
   });
 
   it('places player at {q:0, r:0}', () => {
@@ -32,9 +34,11 @@ describe('createInitialState', () => {
     expect(state.units.get('player-2')?.faction).toBe('player');
   });
 
-  it('sets enemy-1 to faction enemy', () => {
+  it('sets all enemy units to faction enemy', () => {
     const state = createInitialState();
     expect(state.units.get('enemy-1')?.faction).toBe('enemy');
+    expect(state.units.get('enemy-2')?.faction).toBe('enemy');
+    expect(state.units.get('enemy-3')?.faction).toBe('enemy');
   });
 
   it('places player-2 at {q:1, r:1} with moveRange 3', () => {
@@ -49,11 +53,44 @@ describe('createInitialState', () => {
     expect(state.units.get('enemy-1')?.moveRange).toBe(2);
   });
 
+  it('places enemy-2 at {q:9, r:3} and enemy-3 at {q:7, r:5}', () => {
+    const state = createInitialState();
+    expect(state.units.get('enemy-2')?.hex).toEqual({ q: 9, r: 3 });
+    expect(state.units.get('enemy-3')?.hex).toEqual({ q: 7, r: 5 });
+  });
+
   it('sets all units hasMoved to false initially', () => {
     const state = createInitialState();
     state.units.forEach(unit => {
       expect(unit.hasMoved).toBe(false);
     });
+  });
+
+  it('sets all units hasAttacked to false initially', () => {
+    const state = createInitialState();
+    state.units.forEach(unit => {
+      expect(unit.hasAttacked).toBe(false);
+    });
+  });
+
+  it('gives player units hp:10, maxHp:10, attack:3', () => {
+    const state = createInitialState();
+    for (const id of ['player', 'player-2']) {
+      const u = state.units.get(id)!;
+      expect(u.hp).toBe(10);
+      expect(u.maxHp).toBe(10);
+      expect(u.attack).toBe(3);
+    }
+  });
+
+  it('gives enemy units hp:8, maxHp:8, attack:2', () => {
+    const state = createInitialState();
+    for (const id of ['enemy-1', 'enemy-2', 'enemy-3']) {
+      const u = state.units.get(id)!;
+      expect(u.hp).toBe(8);
+      expect(u.maxHp).toBe(8);
+      expect(u.attack).toBe(2);
+    }
   });
 
   it('starts on player turn', () => {
@@ -108,6 +145,11 @@ describe('applyAction MOVE_UNIT', () => {
     expect(after.moveRange).toBe(before.moveRange);
     expect(after.faction).toBe(before.faction);
     expect(after.hasMoved).toBe(true); // MOVE_UNIT sets hasMoved
+    // Combat stats must be preserved unchanged across MOVE_UNIT
+    expect(after.hasAttacked).toBe(before.hasAttacked);
+    expect(after.hp).toBe(before.hp);
+    expect(after.maxHp).toBe(before.maxHp);
+    expect(after.attack).toBe(before.attack);
   });
 
   it('sets hasMoved to true on the moved unit', () => {
@@ -179,6 +221,32 @@ describe('applyAction END_TURN', () => {
     expect(s4.units.get('enemy-1')?.hasMoved).toBe(true);
   });
 
+  it('resets hasAttacked on player-faction units when flipping ENEMY → PLAYER', () => {
+    const s1 = createInitialState();
+    // Manually construct state with hasAttacked: true on both player units
+    const withAttacked = new Map(s1.units);
+    withAttacked.set('player',   { ...s1.units.get('player')!,   hasAttacked: true });
+    withAttacked.set('player-2', { ...s1.units.get('player-2')!, hasAttacked: true });
+    const s2: typeof s1 = { ...s1, units: withAttacked };
+
+    const s3 = applyAction(s2, { type: 'END_TURN' }); // → ENEMY
+    const s4 = applyAction(s3, { type: 'END_TURN' }); // → PLAYER
+    expect(s4.units.get('player')?.hasAttacked).toBe(false);
+    expect(s4.units.get('player-2')?.hasAttacked).toBe(false);
+  });
+
+  it('does NOT reset hasAttacked on enemy-faction units when flipping ENEMY → PLAYER', () => {
+    const s1 = createInitialState();
+    const withAttacked = new Map(s1.units);
+    withAttacked.set('enemy-1', { ...s1.units.get('enemy-1')!, hasAttacked: true });
+    const s2: typeof s1 = { ...s1, units: withAttacked };
+
+    const s3 = applyAction(s2, { type: 'END_TURN' }); // → ENEMY
+    const s4 = applyAction(s3, { type: 'END_TURN' }); // → PLAYER
+    // Enemy hasAttacked is NOT reset — enemy turn management is Phase 5
+    expect(s4.units.get('enemy-1')?.hasAttacked).toBe(true);
+  });
+
   it('returns a new state object', () => {
     const state = createInitialState();
     const next  = applyAction(state, { type: 'END_TURN' });
@@ -236,15 +304,88 @@ describe('getPlayerUnits', () => {
 });
 
 describe('getEnemyUnits', () => {
-  it('returns exactly the 1 enemy-faction unit', () => {
+  it('returns exactly the 3 enemy-faction units', () => {
     const state = createInitialState();
     const units = getEnemyUnits(state);
-    expect(units).toHaveLength(1);
-    expect(units[0].faction).toBe('enemy');
+    expect(units).toHaveLength(3);
+    units.forEach(u => expect(u.faction).toBe('enemy'));
   });
 
-  it('includes enemy-1 by id', () => {
+  it('includes enemy-1, enemy-2, enemy-3 by id', () => {
     const state = createInitialState();
-    expect(getEnemyUnits(state)[0].id).toBe('enemy-1');
+    const ids   = getEnemyUnits(state).map(u => u.id);
+    expect(ids).toContain('enemy-1');
+    expect(ids).toContain('enemy-2');
+    expect(ids).toContain('enemy-3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAdjacentEnemies
+// ---------------------------------------------------------------------------
+
+describe('getAdjacentEnemies', () => {
+  // Initial positions: player at {q:0,r:0}, all enemies at {q:8,r:4}, {q:9,r:3}, {q:7,r:5}.
+  // E neighbor of {q:0,r:0} is {q:1,r:0}; SE neighbor is {q:0,r:1}.
+
+  it('returns empty array when no enemies are adjacent', () => {
+    const state = createInitialState(); // all enemies far from player
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('returns one enemy when it occupies an adjacent hex', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // Move enemy-1 to E neighbor of player hex
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 1, r: 0 } });
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('enemy-1');
+  });
+
+  it('returns multiple enemies when several are adjacent', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 1, r: 0 } }); // E
+    units.set('enemy-2', { ...s0.units.get('enemy-2')!, hex: { q: 0, r: 1 } }); // SE
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result).toHaveLength(2);
+    const ids = result.map(u => u.id);
+    expect(ids).toContain('enemy-1');
+    expect(ids).toContain('enemy-2');
+  });
+
+  it('does not include player-faction units even if adjacent', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // Move player-2 to adjacent hex — player faction, should not be returned
+    units.set('player-2', { ...s0.units.get('player-2')!, hex: { q: 1, r: 0 } });
+    const state = { ...s0, units };
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('does not include non-adjacent enemies (distance > 1)', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // {q:2,r:0} is 2 steps from {q:0,r:0} — not adjacent
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 2, r: 0 } });
+    const state = { ...s0, units };
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('does not include a unit at unitHex itself (center is never a neighbor)', () => {
+    // Place an enemy-faction unit at the queried center hex.
+    // hexNeighbors never returns the center, so this enemy must not appear — even
+    // though it is enemy-faction and would pass the faction filter if it were found.
+    // A player-faction unit at center would be excluded by the faction filter, not
+    // by the neighbor boundary, making it the wrong unit to test this invariant.
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 0, r: 0 } });
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result.every(u => u.id !== 'enemy-1')).toBe(true);
   });
 });

@@ -12,7 +12,8 @@ game-demo/
 └── src/
     ├── main.ts                       # Creates Phaser.Game, registers scenes
     ├── config/
-    │   └── game.config.ts            # Phaser config: pixelArt, resolution, scale
+    │   ├── game.config.ts            # Phaser config: pixelArt, resolution, scale
+    │   └── colors.ts                 # Shared hex highlight color constants (hover, range, selection, attack)
     ├── scenes/
     │   ├── BootScene.ts              # Asset preload pass-through → GameScene
     │   └── GameScene.ts              # Main gameplay scene (stub, grows each phase)
@@ -22,18 +23,24 @@ game-demo/
     │   ├── HexRenderer.ts            # 3 Graphics layers (depth 0/1/2): base grid, range highlight, hover
     │   ├── HexHighlight.ts           # getReachableHexes(): BFS limited by range (pure math, no Phaser)
     │   └── pathfinding.ts            # findPath(): BFS shortest path, excludes start hex; optional blocked set skips occupied waypoints
+    ├── combat/
+    │   └── CombatResolver.ts         # resolveAttack(attacker, defender): AttackResult — pure hit/damage math (75% hit chance, attack±1 damage)
     ├── entities/
-    │   ├── Unit.ts                   # Unit interface (pure data, no Phaser): id, hex, moveRange, faction, hasMoved
-    │   └── UnitSprite.ts             # Phaser.GameObjects.Rectangle placeholder; depth 3
+    │   ├── Unit.ts                   # Unit interface (pure data, no Phaser): id, hex, moveRange, faction, hasMoved, hasAttacked, hp, maxHp, attack
+    │   └── UnitSprite.ts             # Phaser.GameObjects.Container (Rectangle + HP bar children); depth 3; updateHp() recalculates bar; destroy() cleans up children
     ├── state/
-    │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN)
+    │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN, ATTACK_UNIT)
     │   ├── GameState.ts              # GameState interface + createInitialState()
     │   ├── reducer.ts                # applyAction(state, action): GameState — pure, immutable
-    │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits
+    │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits, getAdjacentEnemies
     ├── systems/
     │   ├── MovementSystem.ts         # moveAlongPath(): chains Phaser tweens, returns Promise<void>
     │   ├── InputSystem.ts            # pointerup (left click only) → pixelToHex → onHexClick callback; destroy() removes listener
-    │   └── CameraSystem.ts           # middle-mouse drag pan; scroll-wheel zoom (Phase 2.4)
+    │   ├── CameraSystem.ts           # keyboard pan (arrow+WASD), middle-mouse drag, scroll-wheel zoom, zoom-adaptive grid stroke; update() called each frame
+    │   ├── CombatAnimations.ts       # playAttackBump(): attacker bump tween; showDamageText(): floating hit/miss label; flashDefenderHex(): brief red hex overlay
+    │   ├── HoverSystem.ts            # tracks pointer hex each frame; redraws depth-2 highlight layer (selection indicator + hover tint)
+    │   ├── SelectionManager.ts       # owns selectedUnitId, reachableSet, attackTargetSet; selectUnit() / clearSelection() drive range + attack highlights
+    │   └── TurnSystem.ts             # handleEndTurn() + runEnemyTurn(): END_TURN dispatch, 1-second enemy pause, round counter update; uses callbacks so it never imports SceneMode
     ├── ui/
     │   └── EndTurnButton.ts          # Fixed-screen HUD button (setScrollFactor(0), depth 10); setEnabled() toggles interactivity
     └── utils/
@@ -51,6 +58,50 @@ Before writing any code:
 
 ## Code Style & Conventions
 - TBD
+
+## File Size & Complexity Guidelines
+
+### Core Principle
+
+A file should have **one clear responsibility**. File size is a secondary indicator — a large
+file with one job is better than three small files that fragment a cohesive concept.
+
+### Review Thresholds
+
+When a source file exceeds these line counts, pause and evaluate whether it has accumulated
+multiple responsibilities:
+
+| File Type | Review At | Notes |
+|-----------|:---------:|-------|
+| **Most source files** | ~150 lines | Modules, services, utilities, components, reducers |
+| **Root coordinators** | ~300 lines | Entry points, app shells, container components, or anything whose job is wiring other modules together — larger is expected |
+| **Config / pure type files** | ~50 lines | Should stay trivial; a growing config file usually means misplaced logic |
+| **Test files** | ~400 lines | Consider splitting by feature area if navigability suffers |
+
+These are **review triggers, not hard caps**. A 180-line file of cohesive pure functions is
+fine. A 120-line file with three unrelated responsibilities needs splitting regardless of size.
+
+### When to Split
+
+A file should be split when any of these are true:
+- It has **multiple distinct responsibilities** (e.g., input handling AND state management AND rendering in one file)
+- New features keep getting added to it **because "it's already there"** rather than because they belong there
+- It has **grown 50+ lines in a single session** without a deliberate architectural reason — this is the strongest signal of scope creep
+
+### When NOT to Split
+
+Do **not** split a file just to hit a line-count target. These are signs a large file is healthy:
+- All functions/methods serve a single cohesive purpose (e.g., many utility functions, one domain)
+- The file is a coordinator whose size comes from wiring modules together, not from logic
+- Splitting would require shared state or tight coupling between the new files
+- The file is large because of framework or library API surface area
+
+### How to Split
+
+When splitting is warranted:
+- Extract into the **existing directory structure** — don't create new directories unless a new domain genuinely emerges
+- Follow **established naming conventions** already present in the project
+- The extracted module should be independently understandable — if it requires reading the parent file to make sense, the split was wrong
 
 ## Do not
 - Store secrets in code (use env variables)
