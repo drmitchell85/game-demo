@@ -53,7 +53,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-## Phase 3: Turn System _(planned)_
+## Phase 3: Turn System ✅ Complete
 
 Alternating player/enemy turns. End turn button. Multiple selectable units. (Action points deferred to Phase 4 — no decisions until attacks exist.)
 
@@ -62,8 +62,8 @@ Alternating player/enemy turns. End turn button. Multiple selectable units. (Act
 | 3.1 | ✅ Done | State foundation — `activeTurn`, `round`, `hasMoved`, `faction` on Unit; `END_TURN` reducer action |
 | 3.2 | ✅ Done | Multi-unit sprites — UnitSprite color param; 2 player + 1 enemy in state; `unitSprites` Map in scene |
 | 3.3 | ✅ Done | Unit selection — `selectedUnitId` in scene; `selectors.ts`; click-to-select vs click-to-move |
-| 3.4 | ⬜ Todo | End Turn button + enemy stub + round HUD — `EndTurnButton.ts`; 1s enemy pause; round counter |
-| 3.5 | ⬜ Todo | `hasMoved` gating — block second move per turn; clear range/selection after move |
+| 3.4 | ✅ Done | End Turn button + enemy stub + round HUD — `EndTurnButton.ts`; 1s enemy pause; round counter |
+| 3.5 | ✅ Done | `hasMoved` gating — block second move per turn; clear range/selection after move |
 
 ---
 
@@ -153,20 +153,20 @@ Alternating player/enemy turns. End turn button. Multiple selectable units. (Act
 **Goal:** A fixed "End Turn" button ends the player turn; a 1-second pause simulates the enemy turn; a round counter shows the current round.
 
 **What to do:**
-- [ ] Create `src/ui/EndTurnButton.ts`: Phaser `Rectangle` + `Text` both with `setScrollFactor(0)` (stays fixed on screen), depth 10; `setEnabled(v)` toggles alpha + `disableInteractive()`/`setInteractive()`; position `x: 880, y: 510`; `destroy()` cleanup
-- [ ] `GameScene.ts`: add `endTurnButton: EndTurnButton` and `roundText: Phaser.GameObjects.Text` (top-left, `setScrollFactor(0)`, depth 10)
-- [ ] `GameScene.ts`: `handleEndTurn()` — guard on `sceneMode !== 'IDLE'` or `activeTurn !== 'PLAYER'`; `clearSelection()`; dispatch `END_TURN`; set `sceneMode = 'MOVING'`; disable button; `void this.runEnemyTurn()`
-- [ ] `GameScene.ts`: `runEnemyTurn()` — `await this.time.delayedCall(1000)`; dispatch `END_TURN`; set `sceneMode = 'IDLE'`; enable button; update `roundText`
+- [x] Create `src/ui/EndTurnButton.ts`: Phaser `Rectangle` + `Text` both with `setScrollFactor(0)` (stays fixed on screen), depth 10; `setEnabled(v)` toggles alpha + `disableInteractive()`/`setInteractive()`; position `x: 880, y: 510`; `destroy()` cleanup
+- [x] `GameScene.ts`: add `endTurnButton: EndTurnButton` and `roundText: Phaser.GameObjects.Text` (top-left, `setScrollFactor(0)`, depth 10)
+- [x] `GameScene.ts`: `handleEndTurn()` — guard on `sceneMode !== 'IDLE'` or `activeTurn !== 'PLAYER'`; `clearSelection()`; dispatch `END_TURN`; set `sceneMode = 'MOVING'`; disable button; `void this.runEnemyTurn()`
+- [x] `GameScene.ts`: `runEnemyTurn()` — `await this.time.delayedCall(1000)`; dispatch `END_TURN`; set `sceneMode = 'IDLE'`; enable button; update `roundText`
 
 **Files:**
 - `src/ui/EndTurnButton.ts` _(new)_
 - `src/scenes/GameScene.ts` _(modify)_
 
 **Acceptance criteria:**
-- [ ] "End Turn" button fixed bottom-right at all camera positions and zoom levels
-- [ ] Clicking: button grays out, grid unresponsive for 1 second, then re-enables
-- [ ] Round counter increments after each enemy pause
-- [ ] Button does not move when camera pans
+- [x] "End Turn" button fixed bottom-right at all camera positions and zoom levels
+- [x] Clicking: button grays out, grid unresponsive for 1 second, then re-enables
+- [x] Round counter increments after each enemy pause
+- [x] Button does not move when camera pans
 
 **Decision logged:** `this.time.delayedCall` used instead of `setTimeout` — Phaser's timer respects game pause/resume and uses the same clock as tweens. Phaser objects with `setScrollFactor(0)` used instead of DOM button — avoids click-region misalignment caused by `scale.mode: FIT` CSS-scaling the canvas while DOM elements are not.
 
@@ -177,20 +177,20 @@ Alternating player/enemy turns. End turn button. Multiple selectable units. (Act
 **Goal:** Each player unit can only move once per turn; the range highlight clears after a move; `activeTurn` blocks all player input during enemy turn.
 
 **What to do:**
-- [ ] `GameScene.ts` / `handleMoveIntent`: add guards — `if (gameState.activeTurn !== 'PLAYER') return`; `if (unit.hasMoved) return` (clicking a moved unit selects it but shows no range)
-- [ ] After move resolves: call `clearSelection()` — no range shown until player selects another unit; `hasMoved: true` is already set by the `MOVE_UNIT` reducer (added in 3.1)
-- [ ] `selectUnit(unitId)`: if `unit.hasMoved === true`, select but pass empty array to `highlightRange` (unit is selected but cannot move)
-- [ ] Update `CLAUDE.md` project structure to add `src/ui/` directory
+- [x] `GameScene.ts` / `handleClickIntent`: add guards — `if (gameState.activeTurn !== 'PLAYER') return`; `if (unit.hasMoved) return` (clicking a moved unit selects it but shows no range)
+- [x] After move resolves: call `clearSelection()` — no range shown until player selects another unit; `hasMoved: true` is already set by the `MOVE_UNIT` reducer (added in 3.1)
+- [x] `selectUnit(unitId)`: if `unit.hasMoved === true`, select but show no range (empty `reachableSet`, no blue hexes)
+- [x] Update `CLAUDE.md` project structure — `src/ui/` entry added (done in 3.4); `InputSystem.ts` description updated with `destroy()` note
 
 **Files:**
 - `src/scenes/GameScene.ts` _(modify)_
 - `CLAUDE.md` _(modify)_
 
 **Acceptance criteria:**
-- [ ] Player unit can only move once per turn; clicking it again shows no range
-- [ ] After End Turn + enemy pause, both player units can move again
-- [ ] Enemy rectangle never responds to input
-- [ ] Full turn cycle: move player-1 → move player-2 → End Turn → 1s pause → round increments → both units moveable again
+- [x] Player unit can only move once per turn; clicking it again shows no range
+- [x] After End Turn + enemy pause, both player units can move again
+- [x] Enemy rectangle never responds to input
+- [x] Full turn cycle: move player-1 → move player-2 → End Turn → 1s pause → round increments → both units moveable again
 
 **Decision logged:** `hasMoved: boolean` used instead of action points (`ap`/`maxAp`) — without attacks, AP has no interesting decisions. AP deferred to Phase 4 where the move-vs-attack tradeoff makes it meaningful.
 
