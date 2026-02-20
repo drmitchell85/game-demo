@@ -5,7 +5,7 @@ import { HexRenderer } from '../hex/HexRenderer';
 import { GRID_COLS, GRID_ROWS, HEX_SIZE, PAN_SPEED } from '../config/game.config';
 import { GameState, createInitialState } from '../state/GameState';
 import { applyAction } from '../state/reducer';
-import { getUnitAtHex } from '../state/selectors';
+import { getUnitAtHex, getAdjacentEnemies } from '../state/selectors';
 import { UnitSprite } from '../entities/UnitSprite';
 import { findPath } from '../hex/pathfinding';
 import { getReachableHexes } from '../hex/HexHighlight';
@@ -13,13 +13,16 @@ import { moveAlongPath } from '../systems/MovementSystem';
 import { InputSystem } from '../systems/InputSystem';
 import { CameraSystem } from '../systems/CameraSystem';
 import { EndTurnButton } from '../ui/EndTurnButton';
+import { resolveAttack } from '../combat/CombatResolver';
 
 const HOVER_COLOR  = 0x3d3d8a;
 const HOVER_ALPHA  = 0.75;
-const RANGE_COLOR  = 0x3366cc; // soft blue per ROADMAP spec
+const RANGE_COLOR  = 0x3366cc; // soft blue for movement range
 const RANGE_ALPHA  = 0.25;
 const SELECT_COLOR = 0xffffff; // white overlay on selected unit's hex
 const SELECT_ALPHA = 0.35;
+const ATTACK_COLOR = 0xcc3333; // red for attackable enemy hexes
+const ATTACK_ALPHA = 0.35;
 
 type SceneMode = 'IDLE' | 'MOVING';
 
@@ -53,8 +56,10 @@ export class GameScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private lastZoom = 1;
 
-  // Hex keys of cells the selected unit can currently move to (excludes occupied hexes).
+  // Hex keys the selected unit can move to (excludes occupied hexes).
   private reachableSet: Set<string> = new Set();
+  // Hex keys of adjacent enemies the selected unit can attack (empty if hasAttacked).
+  private attackTargetSet: Set<string> = new Set();
 
   constructor() {
     super({ key: 'GameScene' });
@@ -117,7 +122,7 @@ export class GameScene extends Phaser.Scene {
     // Middle-mouse drag pan and scroll-wheel zoom.
     this.cameraSystem = new CameraSystem(this, this.cameras.main);
 
-    // Wire up click-to-select / click-to-move.
+    // Wire up click-to-select / click-to-attack / click-to-move.
     this.inputSystem = new InputSystem(this, this.grid, this.gridOrigin, HEX_SIZE, (hex) => {
       void this.handleClickIntent(hex);
     });
@@ -164,38 +169,75 @@ export class GameScene extends Phaser.Scene {
     if (this.cursors.down.isDown  || this.wasd.down.isDown)  cam.scrollY += PAN_SPEED;
   }
 
-  // Dispatched on every left-click on the grid. Two cases:
-  //   1. Clicked on a player-faction unit → select it (show range if not yet moved).
-  //   2. Clicked on a reachable hex with a unit selected → move that unit.
+  // Routes a click to the appropriate handler in priority order: select → attack → move.
   private async handleClickIntent(targetHex: HexCoord): Promise<void> {
     if (this.sceneMode !== 'IDLE') return;
     // Defense-in-depth: sceneMode is already 'MOVING' during enemy turn, but
     // this guard makes the intent explicit and covers any future divergence.
     if (this.gameState.activeTurn !== 'PLAYER') return;
 
-    // Case 1: a player unit occupies the clicked hex — select it.
-    const unitAtHex = getUnitAtHex(this.gameState, targetHex);
-    if (unitAtHex?.faction === 'player') {
-      this.selectUnit(unitAtHex.id);
-      return;
-    }
+    if (this.trySelectUnit(targetHex)) return;
+    if (this.tryAttackUnit(targetHex)) return;
+    await this.tryMoveUnit(targetHex);
+  }
 
-    // Case 2: a unit is selected and the target is within its range — move it.
-    if (this.selectedUnitId === null) return;
-    if (!this.reachableSet.has(hexKey(targetHex))) return;
+  // Selects a player-faction unit at the clicked hex.
+  // Returns true if a player unit was found and selected.
+  private trySelectUnit(hex: HexCoord): boolean {
+    const unit = getUnitAtHex(this.gameState, hex);
+    if (unit?.faction !== 'player') return false;
+    this.selectUnit(unit.id);
+    return true;
+  }
 
-    const unitId = this.selectedUnitId; // capture before await — sceneMode blocks mutations but local is explicit
+  // Attacks an enemy at the clicked hex if it is in attackTargetSet.
+  // Returns true if an attack was initiated.
+  private tryAttackUnit(hex: HexCoord): boolean {
+    if (this.selectedUnitId === null) return false;
+    if (!this.attackTargetSet.has(hexKey(hex))) return false;
+
+    const attacker = this.gameState.units.get(this.selectedUnitId);
+    const defender = getUnitAtHex(this.gameState, hex);
+    if (!attacker || !defender) return false;
+
+    const result = resolveAttack(attacker, defender);
+    const newHp  = Math.max(0, defender.hp - result.damage);
+    console.log(
+      `[${attacker.id}] attacks [${defender.id}]: ` +
+      (result.hit
+        ? `HIT for ${result.damage} dmg (HP: ${defender.hp} → ${newHp})`
+        : `MISS (HP: ${defender.hp} → ${newHp})`),  // newHp === defender.hp on miss
+    );
+
+    this.gameState = applyAction(this.gameState, {
+      type:       'ATTACK_UNIT',
+      attackerId: attacker.id,
+      defenderId: defender.id,
+      hit:        result.hit,
+      damage:     result.damage,
+    });
+    this.clearSelection();
+    return true;
+  }
+
+  // Moves the selected unit to `hex` if it is within the reachable range.
+  // Returns true if movement was successfully dispatched; false on all early-exit paths.
+  private async tryMoveUnit(hex: HexCoord): Promise<boolean> {
+    if (this.selectedUnitId === null) return false;
+    if (!this.reachableSet.has(hexKey(hex))) return false;
+
+    const unitId = this.selectedUnitId; // capture before await
     const unit   = this.gameState.units.get(unitId);
-    if (!unit) return; // should always exist; guard against future REMOVE_UNIT action
+    if (!unit) return false; // should always exist; guard against future REMOVE_UNIT action
     // Explicit hasMoved guard: reachableSet is already empty when hasMoved === true
     // (selectUnit clears it), so this case can't be reached in practice. Guard kept
     // for documentation and defense against future range-display bugs.
-    if (unit.hasMoved) return;
+    if (unit.hasMoved) return false;
 
     // Guard before locking state: if the sprite is missing (e.g. unit died),
     // bail out cleanly without ever setting sceneMode = 'MOVING'.
     const sprite = this.unitSprites.get(unitId);
-    if (!sprite) return;
+    if (!sprite) return false;
 
     // Pass occupied hexes so the path never animates through another unit's sprite.
     // Exclude the moving unit's own starting hex — the BFS must be free to treat
@@ -208,12 +250,17 @@ export class GameScene extends Phaser.Scene {
     // path.length === 0 only when start === end, which can't happen here because
     // targetHex is in reachableSet (which excludes the unit's own hex). Guard kept
     // for safety.
-    const path = findPath(this.grid, unit.hex, targetHex, occupiedKeys);
-    if (!path || path.length === 0) return;
+    const path = findPath(this.grid, unit.hex, hex, occupiedKeys);
+    if (!path || path.length === 0) return false;
 
     this.sceneMode = 'MOVING';
     this.endTurnButton.setEnabled(false); // dim button while unit is animating
     this.hexRenderer.clearRange();
+
+    // moved tracks whether state was successfully dispatched.
+    // Initialized before try so the finally block can read it via closure if needed
+    // in a future phase. Return value reported after finally completes.
+    let moved = false;
 
     // try/finally ensures sceneMode and button are always restored, even if
     // moveAlongPath throws (e.g. scene shutdown mid-animation).
@@ -224,33 +271,36 @@ export class GameScene extends Phaser.Scene {
       this.gameState = applyAction(this.gameState, {
         type:   'MOVE_UNIT',
         unitId,
-        to:     targetHex,
+        to:     hex,
       });
 
       this.clearSelection(); // deselect after moving; range clears with it
+      moved = true;
     } finally {
       // clearSelection() and setEnabled() access Phaser GameObjects that are
       // destroyed on scene shutdown. Guard with isActive() so a throw during
       // shutdown doesn't crash inside the finally block itself.
       // sceneMode is a plain field — safe to restore regardless.
       if (this.scene.isActive()) {
-        // Idempotent on the success path (clearSelection already called above);
-        // clears half-selected state if moveAlongPath throws in a live scene.
-        this.clearSelection();
+        // On the error path: clear half-selected state left by the failed animation.
+        // On the success path: clearSelection was already called in the try block;
+        // skip here to avoid a redundant redrawHighlightLayer() render pass.
+        if (!moved) this.clearSelection();
         this.endTurnButton.setEnabled(true);
       }
       this.sceneMode = 'IDLE';
     }
+
+    return moved;
   }
 
-  // Select a unit by id. If the unit has not yet moved, shows its movement range
-  // and the white selection indicator. If it has already moved this turn, shows
-  // only the selection indicator (empty range) — the player can see it's selected
-  // but no blue hexes appear and clicking elsewhere does nothing.
+  // Select a unit by id. Shows movement range (blue) if not yet moved,
+  // and attack targets (red) on adjacent enemies if not yet attacked.
   private selectUnit(unitId: string): void {
     const unit = this.gameState.units.get(unitId);
     if (!unit) return; // should always exist; guard against future REMOVE_UNIT action
     this.selectedUnitId = unitId;
+
     if (unit.hasMoved) {
       // Already moved: clear range so reachableSet stays empty and no blue hexes show.
       this.reachableSet = new Set();
@@ -258,13 +308,27 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.refreshRangeHighlight(unitId);
     }
+
+    // Attack targets: adjacent enemies if unit hasn't attacked this turn.
+    // Painted on the range layer on top of (or instead of) movement range.
+    if (!unit.hasAttacked) {
+      const adjacentEnemies = getAdjacentEnemies(this.gameState, unit.hex);
+      this.attackTargetSet = new Set(adjacentEnemies.map(e => hexKey(e.hex)));
+      if (adjacentEnemies.length > 0) {
+        this.hexRenderer.highlightRange(adjacentEnemies.map(e => e.hex), ATTACK_COLOR, ATTACK_ALPHA);
+      }
+    } else {
+      this.attackTargetSet = new Set();
+    }
+
     this.redrawHighlightLayer();
   }
 
-  // Clear selection, range highlight, and selection indicator.
+  // Clear selection, range highlights (blue + red), and selection indicator.
   private clearSelection(): void {
-    this.selectedUnitId = null;
-    this.reachableSet   = new Set();
+    this.selectedUnitId  = null;
+    this.reachableSet    = new Set();
+    this.attackTargetSet = new Set();
     this.hexRenderer.clearRange();
     this.redrawHighlightLayer();
   }
@@ -285,8 +349,11 @@ export class GameScene extends Phaser.Scene {
 
   // Simulates the enemy turn: waits 1 second, then flips back to the player.
   // Uses Phaser's timer (not setTimeout) so it respects game pause/resume.
+  // The isActive() guard protects GameObjects from being accessed after the scene
+  // is destroyed during the delay (e.g. hot-reload or scene.restart()).
   private async runEnemyTurn(): Promise<void> {
     await new Promise<void>(resolve => this.time.delayedCall(1000, resolve));
+    if (!this.scene.isActive()) return;
     this.gameState = applyAction(this.gameState, { type: 'END_TURN' });
     this.sceneMode = 'IDLE';
     this.endTurnButton.setEnabled(true);

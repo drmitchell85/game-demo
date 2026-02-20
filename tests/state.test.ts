@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createInitialState } from '../src/state/GameState';
 import { applyAction } from '../src/state/reducer';
-import { getUnitAtHex, getPlayerUnits, getEnemyUnits } from '../src/state/selectors';
+import { getUnitAtHex, getPlayerUnits, getEnemyUnits, getAdjacentEnemies } from '../src/state/selectors';
 
 // ---------------------------------------------------------------------------
 // createInitialState
@@ -317,5 +317,75 @@ describe('getEnemyUnits', () => {
     expect(ids).toContain('enemy-1');
     expect(ids).toContain('enemy-2');
     expect(ids).toContain('enemy-3');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getAdjacentEnemies
+// ---------------------------------------------------------------------------
+
+describe('getAdjacentEnemies', () => {
+  // Initial positions: player at {q:0,r:0}, all enemies at {q:8,r:4}, {q:9,r:3}, {q:7,r:5}.
+  // E neighbor of {q:0,r:0} is {q:1,r:0}; SE neighbor is {q:0,r:1}.
+
+  it('returns empty array when no enemies are adjacent', () => {
+    const state = createInitialState(); // all enemies far from player
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('returns one enemy when it occupies an adjacent hex', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // Move enemy-1 to E neighbor of player hex
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 1, r: 0 } });
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('enemy-1');
+  });
+
+  it('returns multiple enemies when several are adjacent', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 1, r: 0 } }); // E
+    units.set('enemy-2', { ...s0.units.get('enemy-2')!, hex: { q: 0, r: 1 } }); // SE
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result).toHaveLength(2);
+    const ids = result.map(u => u.id);
+    expect(ids).toContain('enemy-1');
+    expect(ids).toContain('enemy-2');
+  });
+
+  it('does not include player-faction units even if adjacent', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // Move player-2 to adjacent hex — player faction, should not be returned
+    units.set('player-2', { ...s0.units.get('player-2')!, hex: { q: 1, r: 0 } });
+    const state = { ...s0, units };
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('does not include non-adjacent enemies (distance > 1)', () => {
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    // {q:2,r:0} is 2 steps from {q:0,r:0} — not adjacent
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 2, r: 0 } });
+    const state = { ...s0, units };
+    expect(getAdjacentEnemies(state, { q: 0, r: 0 })).toHaveLength(0);
+  });
+
+  it('does not include a unit at unitHex itself (center is never a neighbor)', () => {
+    // Place an enemy-faction unit at the queried center hex.
+    // hexNeighbors never returns the center, so this enemy must not appear — even
+    // though it is enemy-faction and would pass the faction filter if it were found.
+    // A player-faction unit at center would be excluded by the faction filter, not
+    // by the neighbor boundary, making it the wrong unit to test this invariant.
+    const s0    = createInitialState();
+    const units = new Map(s0.units);
+    units.set('enemy-1', { ...s0.units.get('enemy-1')!, hex: { q: 0, r: 0 } });
+    const state  = { ...s0, units };
+    const result = getAdjacentEnemies(state, { q: 0, r: 0 });
+    expect(result.every(u => u.id !== 'enemy-1')).toBe(true);
   });
 });

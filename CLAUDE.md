@@ -31,7 +31,7 @@ game-demo/
     │   ├── actions.ts                # GameAction union type (MOVE_UNIT, END_TURN, ATTACK_UNIT)
     │   ├── GameState.ts              # GameState interface + createInitialState()
     │   ├── reducer.ts                # applyAction(state, action): GameState — pure, immutable
-    │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits
+    │   └── selectors.ts              # Pure query functions: getUnitAtHex, getPlayerUnits, getEnemyUnits, getAdjacentEnemies
     ├── systems/
     │   ├── MovementSystem.ts         # moveAlongPath(): chains Phaser tweens, returns Promise<void>
     │   ├── InputSystem.ts            # pointerup (left click only) → pixelToHex → onHexClick callback; destroy() removes listener

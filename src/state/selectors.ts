@@ -1,6 +1,6 @@
 import { GameState } from './GameState';
 import { Unit } from '../entities/Unit';
-import { HexCoord } from '../hex/HexCoord';
+import { HexCoord, hexNeighbors } from '../hex/HexCoord';
 
 // Returns the unit occupying the given hex, or undefined if the hex is empty.
 export function getUnitAtHex(state: GameState, hex: HexCoord): Unit | undefined {
@@ -18,4 +18,14 @@ export function getPlayerUnits(state: GameState): Unit[] {
 // Returns all enemy-faction units.
 export function getEnemyUnits(state: GameState): Unit[] {
   return Array.from(state.units.values()).filter(u => u.faction === 'enemy');
+}
+
+// Returns all enemy-faction units occupying a hex adjacent to `unitHex`.
+export function getAdjacentEnemies(state: GameState, unitHex: HexCoord): Unit[] {
+  const result: Unit[] = [];
+  for (const neighbor of hexNeighbors(unitHex)) {
+    const unit = getUnitAtHex(state, neighbor);
+    if (unit?.faction === 'enemy') result.push(unit);
+  }
+  return result;
 }

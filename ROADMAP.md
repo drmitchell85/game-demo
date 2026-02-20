@@ -88,7 +88,7 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 |------|-------------|-----------|
 | 4.1 ✅ | Combat stats — `hp`, `maxHp`, `attack`, `hasAttacked` on Unit; reducer resets `hasAttacked` on END_TURN; 3 enemies total | `Unit.ts`, `GameState.ts`, `reducer.ts`, `tests/state.test.ts` |
 | 4.2 ✅ | Combat resolver + ATTACK_UNIT action — pure hit/damage math; reducer applies damage (clamped to 0); reducer guards against missing/self targets | `combat/CombatResolver.ts` *(new)*, `actions.ts`, `reducer.ts`, `tests/combat.test.ts` *(new)* |
-| 4.3 | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
+| 4.3 ✅ | Attack targeting UI — red highlights on adjacent enemies; click to attack; `hasAttacked` gating; extract `trySelectUnit/tryAttackUnit/tryMoveUnit` helpers | `GameScene.ts`, `selectors.ts` |
 | 4.4a | UnitSprite Container refactor — migrate from bare Rectangle to `Phaser.GameObjects.Container`; update `moveAlongPath` type; verify movement unchanged | `UnitSprite.ts`, `MovementSystem.ts`, `GameScene.ts` |
 | 4.4b | HP bars — bar above each unit using Container children; color thresholds (green/yellow/red); updates after damage | `UnitSprite.ts`, `GameScene.ts` |
 | 4.5 | Death + unit removal — `REMOVE_UNIT` action; destroy sprite; verify hex frees up; handle last-enemy-killed | `actions.ts`, `reducer.ts`, `GameScene.ts`, `UnitSprite.ts`, `tests/combat.test.ts` |
@@ -166,23 +166,23 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 
 ---
 
-### 4.3 — Attack Targeting UI
+### 4.3 ✅ — Attack Targeting UI
 
 **Goal:** When a player unit is selected and hasn't attacked, adjacent enemy hexes glow red. Clicking one triggers the attack. After attacking, selection clears.
 
 **What to do:**
-- [ ] `selectors.ts`: add `getAdjacentEnemies(state, unitHex): Unit[]` — returns enemy-faction units occupying any of the 6 neighbors of `unitHex`
-- [ ] `GameScene.ts`: extract `handleClickIntent` into three helper methods:
+- [x] `selectors.ts`: add `getAdjacentEnemies(state, unitHex): Unit[]` — returns enemy-faction units occupying any of the 6 neighbors of `unitHex`
+- [x] `GameScene.ts`: extract `handleClickIntent` into three helper methods:
   - `trySelectUnit(hex)`: returns `true` if a player unit was selected
   - `tryAttackUnit(hex)`: returns `true` if attack was initiated
-  - `tryMoveUnit(hex)`: returns `true` if movement was initiated
+  - `tryMoveUnit(hex)`: returns `Promise<boolean>` — true if movement dispatched
   - `handleClickIntent` becomes: guards → `trySelectUnit` → `tryAttackUnit` → `tryMoveUnit`
-- [ ] `GameScene.ts` / `selectUnit()`: add `attackTargetSet: Set<string>` — compute adjacent enemies if `hasAttacked === false`, else empty set (parallel to `reachableSet` / `hasMoved`)
-- [ ] `HexRenderer.ts` / `refreshRangeHighlight()`: after drawing blue movement range, draw red overlays on `attackTargetHexes` (`ATTACK_COLOR = 0xcc3333`, `ATTACK_ALPHA = 0.35`)
-- [ ] `tryAttackUnit()`:
+- [x] `GameScene.ts` / `selectUnit()`: add `attackTargetSet: Set<string>` — compute adjacent enemies if `hasAttacked === false`, else empty set (parallel to `reachableSet` / `hasMoved`)
+- [x] `GameScene.ts` / `selectUnit()`: after drawing blue movement range, draw red overlays on `attackTargetHexes` (`ATTACK_COLOR = 0xcc3333`, `ATTACK_ALPHA = 0.35`)
+- [x] `tryAttackUnit()`:
   1. If clicked hex is in `attackTargetSet`
   2. Call `resolveAttack(attacker, defender)` to get `{ hit, damage }`
-  3. `console.log` attack result: `[attacker.id] attacks [defender.id]: HIT for X dmg | MISS (HP: X→Y)` — temporary, for browser-verifiable testing
+  3. `console.log` attack result: `[attacker.id] attacks [defender.id]: HIT for X dmg (HP: X→Y) | MISS (HP: X→Y)` — temporary, removed in 4.4b
   4. Dispatch `ATTACK_UNIT` action
   5. Call `clearSelection()`
   6. (No death handling yet — deferred to 4.5)
@@ -192,12 +192,12 @@ A commit-by-commit plan for building a Battle Brothers-inspired tactical hex gam
 - `src/state/selectors.ts` _(modify — add getAdjacentEnemies)_
 
 **Acceptance criteria:**
-- [ ] Select a player unit adjacent to an enemy → red highlight on enemy hex
-- [ ] Click red hex → `hasAttacked` becomes true; selection clears; console shows attack result
-- [ ] Re-select the same unit → no red highlights (already attacked); blue movement range still shows if `hasMoved === false`
-- [ ] Non-adjacent enemies get no red highlight
-- [ ] Units with HP ≤ 0 remain on the map (expected — death handling is 4.5). Attacking a 0-HP unit still works.
-- [ ] `npm test` passes; `npm run build` clean
+- [x] Select a player unit adjacent to an enemy → red highlight on enemy hex
+- [x] Click red hex → `hasAttacked` becomes true; selection clears; console shows attack result
+- [x] Re-select the same unit → no red highlights (already attacked); blue movement range still shows if `hasMoved === false`
+- [x] Non-adjacent enemies get no red highlight
+- [x] Units with HP ≤ 0 remain on the map (expected — death handling is 4.5). Attacking a 0-HP unit still works.
+- [x] `npm test` passes; `npm run build` clean
 
 ---
 
